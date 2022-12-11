@@ -5,10 +5,13 @@
 
 #include "Unit1.h"
 #include "Unit2.h"
+//#include "Unit4.h"
 #include <math.h>
+#include <vector>
 //---------------------------------------------------------------------------
 #pragma package(smart_init)
 #pragma resource "*.dfm"
+using namespace std;
 TForm1 *Form1;
 //Призма. Поворот и перенос вокруг всех осей, масштабирование, закраска и удаление невидимых поверхностей
 struct face
@@ -33,15 +36,31 @@ void openBuffer(TImage* Image1);//Открытие буфера для двойной буферизации
 void closeBuffer(void);//Закрытие буфера
 void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, int w, int x, int y);//Заливка грани
 
+void windowFill(TColor* frame, int* w, int x, int y, unsigned int color=0xFFFFFFFF);
+void print1(TColor* frame, int imSize);
+int isOuter(int* w, int i);
+void getGab(int i);
+int getFaceNum(int* w);
+int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y);
+double getZ(int* w, int i);
+
+//void isCover(void);
+
+vector<int> stack;
 MyPoint* prism=new MyPoint[6];
+MyPoint* prismGab=new MyPoint[2];
+MyPoint* pyr=new MyPoint[4];
 face* samePrism=new face[6];
 double prismProj[6][4];
+double pyrProj[4][4];
 long int bariocenter[3];
 
 TColor* buff=0;
 BITMAPINFO info;
 
 double h=50.0;
+double pyrEdge=50;
+double pyrH=pyrEdge*0.866;
 int d=200;
 double z_plane=100.0;
 double z=500.0;
@@ -61,6 +80,7 @@ __fastcall TForm1::TForm1(TComponent* Owner)
 //---------------------------------------------------------------------------
 void __fastcall TForm1::Form1Create(TObject *Sender)
 {
+
 //Инициализация и вывод шестиугольнка
 //Подготовка bitmap
 prisminit(prism);
@@ -368,6 +388,9 @@ prismProj[k][3]= v2[3];
 
  fillFaceList();
  countCoeffs();
+ //getGab();
+ //TColor* p= new TColor[1];
+ print1(buff,Image1->Width);
  int facecenter[2]={0};
 
  for(int i=0;i<5;i++)
@@ -382,9 +405,11 @@ prismProj[k][3]= v2[3];
  bresline(buff,Image1->Width,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d);
  bresline(buff,Image1->Width,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d,samePrism[i].f[3][0]+d,samePrism[i].f[3][1]+d);
  //Заливка граней
+ /*
  facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d+samePrism[i].f[3][0]+d)/4;
  facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d+samePrism[i].f[3][1]+d)/4;
  surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
+ */
  }
  else
  {//Отрисовка контура треугольных граней
@@ -392,9 +417,11 @@ prismProj[k][3]= v2[3];
  bresline(buff,Image1->Width,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d);
  bresline(buff,Image1->Width,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d);
  //Заливка треугольных граней
+ /*
  facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d)/3;
  facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d)/3;
  surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
+ */
  }
  samePrism[i].A=0.0;
  samePrism[i].B=0.0;
@@ -506,6 +533,14 @@ void prisminit(MyPoint* o)
  {
  o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h);
  }
+}
+
+void pyrinit(MyPoint* o)
+{
+  o[0]=MyPoint('A',0.0,0.0,0);
+  o[1]=MyPoint(char('A'+1),0.0,50.0,0);
+  o[2]=MyPoint(char('A'+2),pyrH,pyrEdge/2,0);
+  o[3]=MyPoint(char('A'+3),200.0,0.0,-1*pyrH);
 }
 //---------------------------------------------------------------------------
 
@@ -668,4 +703,215 @@ void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, in
  }
 }
 
+void print1(TColor* frame, int imSize)
+{
+int N=5;
+int out=0;
+int faceNum=0;
+int window[] = {0,0,0};
+window[2]=imSize;
+int width=imSize;
+stack.push_back(window[0]);
+stack.push_back(window[1]);
+stack.push_back(window[2]);
+while(!stack.empty())
+{
+  window[2]=stack.back();
+  stack.pop_back();
+  window[1]=stack.back();
+  stack.pop_back();
+  window[0]=stack.back();
+  stack.pop_back();
+  int a =stack.empty();
+  imSize=window[2];
+  out=0;
+  for(int i=0;i<N && out==0;i++)
+  {
+   out = isOuter(window,i);
+  }
+  if(out!=0)
+  {
+   if(imSize>1)
+   {
+    imSize/=2;
+    //
+    stack.push_back(window[0]+imSize);
+    stack.push_back(window[1]+imSize);
+    stack.push_back(imSize);
+    //
+    stack.push_back(window[0]);
+    stack.push_back(window[1]+imSize);
+    stack.push_back(imSize);
+    //
+    stack.push_back(window[0]+imSize);
+    stack.push_back(window[1]);
+    stack.push_back(imSize);
+    //
+    stack.push_back(window[0]);
+    stack.push_back(window[1]);
+    stack.push_back(imSize);
+    //
+   }
+   else
+   {
+    int a;
+    faceNum=getFaceNum(window);
+    if(faceNum!=-1)
+    {
+     frame[window[0]+(window[1])*width]=0x0000FF00;
+    }
+    else
+    {frame[window[0]+(window[1])*width]=0x0000FF00;}
+    //Вывести многоугольник
+   }
+  }
+  else
+  {frame[window[0]+window[1]*width]=0x0000FF00;}
+}
+
+}
+
+void windowFill(TColor* frame, int* w, int x, int y, unsigned int color)
+{
+  if((y-w[1]!=w[2])&&(y-w[0]!=w[2]))
+ {
+ frame[x+y*w[2]]=color;
+ windowFill(frame, w, x+1, y);
+ windowFill(frame, w, x, y+1);
+ windowFill(frame, w, x-1, y);
+ windowFill(frame, w, x, y-1);
+ }
+}
+int isOuter(int* w, int i)
+{ int xl = w[0];
+  int xr = w[0]+w[2]-1;
+  int yd = w[1];
+  int yu = w[1]+w[2]-1;
+  int out=1;
+  getGab(i);
+  if(prismGab[0].get_x()+d>xr){out=0;}
+  if(prismGab[1].get_x()+d<xl){out=0;}
+  if(prismGab[0].get_y()+d>yu){out=0;}
+  if(prismGab[1].get_y()+d<yd){out=0;}
+  return out;
+}
+
+void getGab(int i)
+{
+  int xMin=samePrism[i].f[0][0];
+  int xMax=samePrism[i].f[0][0];
+  int yMin=samePrism[i].f[0][1];
+  int yMax=samePrism[i].f[0][1];
+  for(int j=0;j<4-samePrism[i].trian;j++)
+  {
+    if(xMin>samePrism[i].f[j][0])
+    {xMin=samePrism[i].f[j][0];}
+    if(xMax<samePrism[i].f[j][0])
+    {xMax=samePrism[i].f[j][0];}
+    if(yMin>samePrism[i].f[j][1])
+    {yMin=samePrism[i].f[j][1];}
+    if(yMax<samePrism[i].f[j][1])
+    {yMax=samePrism[i].f[j][1];}
+  }
+  prismGab[0].set_x(xMin);
+  prismGab[0].set_y(yMin);
+  prismGab[1].set_x(xMax);
+  prismGab[1].set_y(yMax);
+}
+
+int getFaceNum(int* w)
+{
+ int faceNum=-1;
+ int vis=-2;
+ double zMax=getZ(w,0);
+ double p1x, p1y, p2x, p2y;
+ double xCen=w[0]+w[2]/2;
+ double yCen=w[1]+w[2]/2;
+ double z=0;
+ int N=5;
+ int k=0;
+ for(int i=0;i<N;i++)
+ { //5=6-1 - кол-во точек в призме
+   int j=0;
+   while(j<3-samePrism[i].trian)
+   {
+    p1x=samePrism[i].f[j][0]+d;
+    p1y=samePrism[i].f[j][1]+d;
+    p2x=samePrism[i].f[j+1][0]+d;
+    p2y=samePrism[i].f[j+1][1]+d;
+    if(vis==-2)
+    {
+     vis=isVisible(xCen, yCen, p1x, p1y, p2x, p2y);
+     j++;
+     continue;
+    }
+    if(vis!=isVisible(xCen, yCen, p1x, p1y, p2x, p2y))
+    {
+     vis=-2;
+     break;
+    }
+    else
+    {
+     int v=9;
+    }
+    j++;
+   }
+   if(vis==-2)
+   {continue;}
+   p1x=prismProj[j][0]+d;
+   p1y=prismProj[j][1]+d;
+   p2x=prismProj[j+1][0]+d;
+   p2y=prismProj[j+1][1]+d;
+   vis=isVisible(xCen, yCen, p1x, p1y, p2x, p2y);
+   if(vis>=0)
+   {
+    z=getZ(w,i);
+    if(z>zMax)
+    {
+     z=zMax;
+     faceNum=i;
+    }
+   }
+ }
+ return faceNum;
+}
+
+int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y)
+{
+ int vis=0;
+ vis=(x-p1x)*(p2y-p1y)-(y-p1y)*(p2x-p1x);
+ if(vis!=0)
+ {
+  vis=(vis<0)?-1:1;
+ }
+ return vis;
+}
+
+double getZ(int* w, int i)
+{
+ double z=samePrism[i].f[0][2];
+ double xCen=w[0]+w[2]/2;
+ double yCen=w[1]+w[2]/2;
+ if(samePrism[i].C==0.0)
+ { //также для призмы
+  for(int j=1;j<3+samePrism[i].trian;j++)
+  {
+   if(samePrism[i].f[j][2]<samePrism[i].f[j-1][2])
+   {z=samePrism[i].f[j-1][2];}
+   else
+   {z=samePrism[i].f[j][2];}
+  }
+ }
+ else
+ {
+  z=-1*(samePrism[i].A*xCen+samePrism[i].B*yCen+samePrism[i].D)/samePrism[i].C;
+ }
+ return z;
+}
+void __fastcall TForm1::Image1MouseMove(TObject *Sender,
+      TShiftState Shift, int X, int Y)
+{
+ LabeledEdit1->Text=IntToStr(X)+", " + IntToStr(Y);
+}
+//---------------------------------------------------------------------------
 

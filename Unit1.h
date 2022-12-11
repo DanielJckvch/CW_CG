@@ -23,6 +23,7 @@ __published:	// IDE-managed Components
         TButton *Button8;
         TEdit *Edit1;
         TEdit *Edit2;
+        TLabeledEdit *LabeledEdit1;
         void __fastcall Form1Create(TObject *Sender);
         void __fastcall Button1Click(TObject *Sender);
         void __fastcall Button2Click(TObject *Sender);
@@ -33,6 +34,8 @@ __published:	// IDE-managed Components
         void __fastcall Button7Click(TObject *Sender);
         void __fastcall Button8Click(TObject *Sender);
         void __fastcall Form1Close(TObject *Sender, TCloseAction &Action);
+        void __fastcall Image1MouseMove(TObject *Sender,
+          TShiftState Shift, int X, int Y);
 private:	// User declarations
 public:		// User declarations
         __fastcall TForm1(TComponent* Owner);

@@ -1,8 +1,8 @@
 object Form1: TForm1
-  Left = 216
-  Top = 201
+  Left = 195
+  Top = 143
   Width = 1135
-  Height = 584
+  Height = 589
   Caption = 'Form1'
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
@@ -17,9 +17,10 @@ object Form1: TForm1
   TextHeight = 13
   object Image1: TImage
     Left = 0
-    Top = -8
-    Width = 569
-    Height = 553
+    Top = 0
+    Width = 550
+    Height = 550
+    OnMouseMove = Image1MouseMove
   end
   object Button1: TButton
     Left = 600
@@ -108,5 +109,18 @@ object Form1: TForm1
     Height = 21
     TabOrder = 9
     Text = 'Edit2'
+  end
+  object LabeledEdit1: TLabeledEdit
+    Left = 672
+    Top = 320
+    Width = 121
+    Height = 21
+    EditLabel.Width = 62
+    EditLabel.Height = 13
+    EditLabel.Caption = 'LabeledEdit1'
+    LabelPosition = lpAbove
+    LabelSpacing = 3
+    TabOrder = 10
+    OnMouseMove = Image1MouseMove
   end
 end
