@@ -16,7 +16,7 @@ TForm1 *Form1;
 //Призма. Поворот и перенос вокруг всех осей, масштабирование, закраска и удаление невидимых поверхностей
 struct face
 {
-  double* f[4];
+  double** f;
   double A;
   double B;
   double C;
@@ -25,6 +25,22 @@ struct face
   unsigned int color;
   bool toPrint;
   bool trian;
+  face(void)
+  {
+   f=new double*[4];
+   for(int i=0;i<4;i++)
+   {
+    f[i]=new double[4];
+   }
+  }
+  ~face()
+  {
+   for(int i=0;i<4;i++)
+   {
+    delete[] f[i];
+   }
+   delete[] f;
+  }
 };
 void print(MyPoint* o, TImage* Image1);//Печатание призмы
 void rotandscale(MyPoint* o, bool sw, bool sign);//Поворот и масштабирование
@@ -43,6 +59,7 @@ void getGab(int i);
 int getFaceNum(int* w);
 int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y);
 double getZ(int* w, int i);
+void copy(double* vp, double* p);
 
 //void isCover(void);
 
@@ -50,7 +67,8 @@ vector<int> stack;
 MyPoint* prism=new MyPoint[6];
 MyPoint* prismGab=new MyPoint[2];
 MyPoint* pyr=new MyPoint[4];
-face* samePrism=new face[6];
+//face* samePrism=new face[6];
+face* verges=new face[6];//Добавить удаление
 double prismProj[6][4];
 double pyrProj[4][4];
 long int bariocenter[3];
@@ -289,7 +307,7 @@ void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
      delete buff;
     }
     delete prism;
-    delete samePrism;
+    delete verges;
 }
 //---------------------------------------------------------------------------
 
@@ -395,17 +413,17 @@ prismProj[k][3]= v2[3];
 
  for(int i=0;i<5;i++)
  {
- if(samePrism[i].toPrint)
+ if(verges[i].toPrint)
  {
 
- if(!samePrism[i].trian)
+ if(!verges[i].trian)
  {//Отрисовка контура четырёхугольных граней
- bresline(buff,Image1->Width,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d);
- bresline(buff,Image1->Width,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d,samePrism[i].f[3][0]+d,samePrism[i].f[3][1]+d);
- bresline(buff,Image1->Width,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d);
- bresline(buff,Image1->Width,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d,samePrism[i].f[3][0]+d,samePrism[i].f[3][1]+d);
+ bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
+ bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
+ bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[3][0],verges[i].f[3][1]);
+ bresline(buff,Image1->Width,verges[i].f[3][0],verges[i].f[3][1],verges[i].f[0][0],verges[i].f[0][1]);
  //Заливка граней
- /*
+  /*
  facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d+samePrism[i].f[3][0]+d)/4;
  facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d+samePrism[i].f[3][1]+d)/4;
  surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
@@ -413,20 +431,20 @@ prismProj[k][3]= v2[3];
  }
  else
  {//Отрисовка контура треугольных граней
- bresline(buff,Image1->Width,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d);
- bresline(buff,Image1->Width,samePrism[i].f[1][0]+d,samePrism[i].f[1][1]+d,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d);
- bresline(buff,Image1->Width,samePrism[i].f[2][0]+d,samePrism[i].f[2][1]+d,samePrism[i].f[0][0]+d,samePrism[i].f[0][1]+d);
+ bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
+ bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
+ bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[0][0],verges[i].f[0][1]);
  //Заливка треугольных граней
  /*
  facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d)/3;
  facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d)/3;
  surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
- */
+  */
  }
- samePrism[i].A=0.0;
- samePrism[i].B=0.0;
- samePrism[i].C=0.0;
- samePrism[i].D=0.0;
+ verges[i].A=0.0;
+ verges[i].B=0.0;
+ verges[i].C=0.0;
+ verges[i].D=0.0;
  }
  }
  //Вывод буфера на экран
@@ -434,26 +452,26 @@ prismProj[k][3]= v2[3];
  //Обозначение вершин буквами
  for(int i=0;i<5;i++)
  {
- if(samePrism[i].toPrint)
+ if(verges[i].toPrint)
  {
  int off_x;//Смещение буквы по x
  int off_y;//Смещение буквы по y
- for(int j=0;j<3+!samePrism[i].trian;j++)
+ for(int j=0;j<3+!verges[i].trian;j++)
  {
  //Вычисление смещений
- off_x=(prismProj[samePrism[i].index[j]][0]<bariocenter[0])?-10:8;
- off_y=(prismProj[samePrism[i].index[j]][1]<bariocenter[1])?-12:2;
+ off_x=(prismProj[verges[i].index[j]][0]<bariocenter[0])?-10:8;
+ off_y=(prismProj[verges[i].index[j]][1]<bariocenter[1])?-12:2;
  /*
  if(samePrism[i].index[j]>2)
- {off_y=(prismProj[samePrism[i].index[j]][1]>prismProj[samePrism[i].index[j]-3][1])?12:-2;}
+ {off_y=(prismProj[verges[i].index[j]][1]>prismProj[verges[i].index[j]-3][1])?12:-2;}
  else
- {off_y=(prismProj[samePrism[i].index[j]][1]<prismProj[samePrism[i].index[j]+3][1])?-12:2;}
+ {off_y=(prismProj[vergesi].index[j]][1]<prismProj[verges[i].index[j]+3][1])?-12:2;}
  */
  //Вывод букв
- Image1->Canvas->TextOutA(samePrism[i].f[j][0]+d+off_x,samePrism[i].f[j][1]+d+off_y,o[samePrism[i].index[j]].get_let());
+ Image1->Canvas->TextOutA(verges[i].f[j][0]+off_x,verges[i].f[j][1]+off_y,o[verges[i].index[j]].get_let());
  }
- samePrism[i].trian=false;
- samePrism[i].toPrint=false;
+ verges[i].trian=false;
+ verges[i].toPrint=false;
  }
  }
 
@@ -526,9 +544,9 @@ o[k].set_z(v2[2]);
 }
 void prisminit(MyPoint* o)
 {
-  o[0]=MyPoint('A',0.0,200.0,-h/2);
-  o[1]=MyPoint(char('A'+1),0.0,0.0,-h/2);
-  o[2]=MyPoint(char('A'+2),200.0,0.0,-h/2);
+  o[0]=MyPoint('A',0.0,200.0,h/2);
+  o[1]=MyPoint(char('A'+1),0.0,0.0,h/2);
+  o[2]=MyPoint(char('A'+2),200.0,0.0,h/2);
  for(int i=3; i<6; i++)
  {
  o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h);
@@ -583,9 +601,9 @@ for(int k=0;k<2;k++)
 for(int i=0;i<3;i++)
 {
   //Внесение в список треугольных граней(оснований)
-  samePrism[k].f[i]=prismProj[i+k*3];
-  samePrism[k].index[i]=i+k*3;
-  samePrism[k].trian=true;
+  copy(verges[k].f[i], prismProj[i+k*3]);
+  verges[k].index[i]=i+k*3;
+  verges[k].trian=true;
 }
 }
 //Внесение в список треугольных граней(оснований)
@@ -593,26 +611,59 @@ for(int i=0;i<3;i++)
 2-правая нижняя, 3-левая верхняя, 4-правая верхняя*/
 for(int k=2;k<5;k++)
 {
- for(int i=0;i<4;i++)
+ for(int i=0;i<2;i++)
  {
   if(k==4)
   { //Грань ACFD-замыкающая
-  int skip=(i==3||i==0)*((i==0)?-1:1);
-  samePrism[k].f[i]=prismProj[k-3+i+skip];
-   samePrism[k].index[i]=k-3+i+skip;}
- else
- {//Грани BADE и CBEF
- bool skip=(i>=2)?1:0;
- samePrism[k].f[i]=prismProj[k-2+i+skip];
- samePrism[k].index[i]=k-2+i+skip;}
+   if(i==0)
+   {
+    copy(verges[k].f[i], prismProj[2]);
+    verges[k].index[i]=2;
+   }
+   else
+   {
+    copy(verges[k].f[i], prismProj[5]);
+    verges[k].index[i]=5;
+   }
+  }
+  else
+  {//Грани BADE и CBEF
+   int skip=(i>0)?2:0;
+   copy(verges[k].f[i], prismProj[i+skip+k-2]);
+   verges[k].index[i]=i+skip+k-2;
+  }
  }
+
+ for(int i=2;i<4;i++)
+ {
+  if(k==4)
+  {
+   if(i==3)
+   {
+    copy(verges[k].f[i], prismProj[0]);
+    verges[k].index[i]=0;
+   }
+   else
+   {
+    copy(verges[k].f[i], prismProj[3]);
+    verges[k].index[i]=3;
+   }
+  }
+  else
+  {//Грани BADE и CBEF
+   int skip=(i==2)?2:-2;
+   copy(verges[k].f[i], prismProj[i+skip+k-2]);
+   verges[k].index[i]=i+skip+k-2;
+  }
+ }
+
  }
  //Инициализация цвета поверхности
- samePrism[0].color=0x00FF00ff;//Фиолетовый
- samePrism[1].color=0x00FF0000;//Красный
- samePrism[2].color=0x0000FF00;//Зелёный
- samePrism[3].color=0x000000FF;//Синий
- samePrism[4].color=0x00FFFF00;//Жёлтый
+ verges[0].color=0x00FF00ff;//Фиолетовый
+ verges[1].color=0x00FF0000;//Красный
+ verges[2].color=0x0000FF00;//Зелёный
+ verges[3].color=0x000000FF;//Синий
+ verges[4].color=0x00FFFF00;//Жёлтый
 }
 //---------------------------------------------------------------------------
 
@@ -643,28 +694,19 @@ bariocenter[2]=0;
  //Вычисление векторов нормали
 for(int i=0;i<5;i++)
 {
-
 for(int j=0;j<3;j++)
 {
-v1[j]=samePrism[i].f[1][j]-samePrism[i].f[0][j];
-v2[j]=samePrism[i].f[2][j]-samePrism[i].f[0][j];
+v1[j]=verges[i].f[0][j]-verges[i].f[2][j];
+v2[j]=verges[i].f[1][j]-verges[i].f[2][j];
 }
-samePrism[i].A=v1[1]*v2[2]-v1[2]*v2[1];
-samePrism[i].B=v2[0]*v1[2]-v1[0]*v2[2];
-samePrism[i].C=v1[0]*v2[1]-v1[1]*v2[0];
-samePrism[i].D=(-1*samePrism[i].A*samePrism[i].f[0][0]-samePrism[i].B*samePrism[i].f[0][1]-samePrism[i].C*samePrism[i].f[0][2]);
-//Поворот векторов внутрь призмы
-if(samePrism[i].A*bariocenter[0]+samePrism[i].B*bariocenter[1]+samePrism[i].C*bariocenter[2]+samePrism[i].D>0)
-{
-samePrism[i].A*=-1;
-samePrism[i].B*=-1;
-samePrism[i].C*=-1;
-samePrism[i].D*=-1;
-}
-//Определение видимости поверхности
-if(samePrism[i].C>0)
-{samePrism[i].toPrint=true;}
 
+verges[i].A=v1[1]*v2[2]-v1[2]*v2[1];
+verges[i].B=v2[0]*v1[2]-v1[0]*v2[2];
+verges[i].C=v1[0]*v2[1]-v1[1]*v2[0];
+verges[i].D=-1*(verges[i].A*verges[i].f[0][0]+verges[i].B*verges[i].f[0][1]+verges[i].C*verges[i].f[0][2]);
+//Поворот векторов внутрь призмы
+double sum=(verges[i].A+verges[i].B+verges[i].C+verges[i].D)*(bariocenter[0]+bariocenter[1]+bariocenter[2]+1);
+ 
 }
 }
 //---------------------------------------------------------------------------
@@ -725,6 +767,7 @@ while(!stack.empty())
   int a =stack.empty();
   imSize=window[2];
   out=0;
+
   for(int i=0;i<N && out==0;i++)
   {
    out = isOuter(window,i);
@@ -754,32 +797,34 @@ while(!stack.empty())
    }
    else
    {
-    int a;
     faceNum=getFaceNum(window);
     if(faceNum!=-1)
     {
-     frame[window[0]+(window[1])*width]=0x0000FF00;
+    if(faceNum==0)
+     {a=7;}
+     frame[window[0]+(window[1])*width]=verges[faceNum].color;
     }
+
     else
-    {frame[window[0]+(window[1])*width]=0x0000FF00;}
+    {frame[window[0]+(window[1])*width]=0xFFFFFFFF;}
     //Вывести многоугольник
    }
   }
-  else
-  {frame[window[0]+window[1]*width]=0x0000FF00;}
+  //else
+  //{windowFill(frame,window, window[0],window[1], 0xFFFFFFFF);}
 }
 
 }
 
 void windowFill(TColor* frame, int* w, int x, int y, unsigned int color)
 {
-  if((y-w[1]!=w[2])&&(y-w[0]!=w[2]))
+  if((x-w[1]!=w[2])&&(y-w[0]!=w[2]))
  {
  frame[x+y*w[2]]=color;
  windowFill(frame, w, x+1, y);
  windowFill(frame, w, x, y+1);
- windowFill(frame, w, x-1, y);
- windowFill(frame, w, x, y-1);
+ //windowFill(frame, w, x-1, y);
+ //windowFill(frame, w, x, y-1);
  }
 }
 int isOuter(int* w, int i)
@@ -789,41 +834,44 @@ int isOuter(int* w, int i)
   int yu = w[1]+w[2]-1;
   int out=1;
   getGab(i);
-  if(prismGab[0].get_x()+d>xr){out=0;}
-  if(prismGab[1].get_x()+d<xl){out=0;}
-  if(prismGab[0].get_y()+d>yu){out=0;}
-  if(prismGab[1].get_y()+d<yd){out=0;}
+  if(prismGab[0].get_x()>xr){out=0;}
+  if(prismGab[1].get_x()<xl){out=0;}
+  if(prismGab[0].get_y()>yu){out=0;}
+  if(prismGab[1].get_y()<yd){out=0;}
   return out;
 }
 
 void getGab(int i)
 {
-  int xMin=samePrism[i].f[0][0];
-  int xMax=samePrism[i].f[0][0];
-  int yMin=samePrism[i].f[0][1];
-  int yMax=samePrism[i].f[0][1];
-  for(int j=0;j<4-samePrism[i].trian;j++)
+  int xMin=verges[i].f[0][0];
+  int xMax=verges[i].f[0][0];
+  int yMin=verges[i].f[0][1];
+  int yMax=verges[i].f[0][1];
+  for(int j=0;j<4-verges[i].trian;j++)
   {
-    if(xMin>samePrism[i].f[j][0])
-    {xMin=samePrism[i].f[j][0];}
-    if(xMax<samePrism[i].f[j][0])
-    {xMax=samePrism[i].f[j][0];}
-    if(yMin>samePrism[i].f[j][1])
-    {yMin=samePrism[i].f[j][1];}
-    if(yMax<samePrism[i].f[j][1])
-    {yMax=samePrism[i].f[j][1];}
+    if(xMin>verges[i].f[j][0])
+    {xMin=verges[i].f[j][0];}
+    if(xMax<verges[i].f[j][0])
+    {xMax=verges[i].f[j][0];}
+    if(yMin>verges[i].f[j][1])
+    {yMin=verges[i].f[j][1];}
+    if(yMax<verges[i].f[j][1])
+    {yMax=verges[i].f[j][1];}
   }
   prismGab[0].set_x(xMin);
   prismGab[0].set_y(yMin);
   prismGab[1].set_x(xMax);
   prismGab[1].set_y(yMax);
 }
-
+/*Нумерация вершин(с внешней строны грани ACDF): 1-левая нижняя,
+2-правая нижняя, 3-левая верхняя, 4-правая верхняя*/
 int getFaceNum(int* w)
 {
+ if(w[0]==200&&w[1]==282)
+ {int c=0;}
  int faceNum=-1;
  int vis=-2;
- double zMax=getZ(w,0);
+ double zMax=-100000.0;
  double p1x, p1y, p2x, p2y;
  double xCen=w[0]+w[2]/2;
  double yCen=w[1]+w[2]/2;
@@ -833,12 +881,14 @@ int getFaceNum(int* w)
  for(int i=0;i<N;i++)
  { //5=6-1 - кол-во точек в призме
    int j=0;
-   while(j<3-samePrism[i].trian)
+   while(j<3-verges[i].trian)
    {
-    p1x=samePrism[i].f[j][0]+d;
-    p1y=samePrism[i].f[j][1]+d;
-    p2x=samePrism[i].f[j+1][0]+d;
-    p2y=samePrism[i].f[j+1][1]+d;
+
+    p1x=verges[i].f[j][0];
+    p1y=verges[i].f[j][1];
+    p2x=verges[i].f[j+1][0];
+    p2y=verges[i].f[j+1][1];
+
     if(vis==-2)
     {
      vis=isVisible(xCen, yCen, p1x, p1y, p2x, p2y);
@@ -850,28 +900,25 @@ int getFaceNum(int* w)
      vis=-2;
      break;
     }
-    else
-    {
-     int v=9;
-    }
     j++;
    }
    if(vis==-2)
    {continue;}
-   p1x=prismProj[j][0]+d;
-   p1y=prismProj[j][1]+d;
-   p2x=prismProj[j+1][0]+d;
-   p2y=prismProj[j+1][1]+d;
-   vis=isVisible(xCen, yCen, p1x, p1y, p2x, p2y);
-   if(vis>=0)
+   p1x=verges[i].f[j][0];
+   p1y=verges[i].f[j][1];
+   p2x=verges[i].f[0][0];
+   p2y=verges[i].f[0][1];
+   if(vis==isVisible(xCen, yCen, p1x, p1y, p2x, p2y))
    {
     z=getZ(w,i);
+    //z=((z<0)?-1:1)*z;
     if(z>zMax)
     {
-     z=zMax;
+     zMax=z;
      faceNum=i;
     }
    }
+   vis=-2;
  }
  return faceNum;
 }
@@ -889,24 +936,24 @@ int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y
 
 double getZ(int* w, int i)
 {
- double z=samePrism[i].f[0][2];
+ double zp;
  double xCen=w[0]+w[2]/2;
  double yCen=w[1]+w[2]/2;
- if(samePrism[i].C==0.0)
- { //также для призмы
-  for(int j=1;j<3+samePrism[i].trian;j++)
+ if(verges[i].C==0.0)
+ {//также для призмы
+  for(int j=1;j<4-verges[i].trian;j++)
   {
-   if(samePrism[i].f[j][2]<samePrism[i].f[j-1][2])
-   {z=samePrism[i].f[j-1][2];}
+   if(verges[i].f[j][2]<verges[i].f[j-1][2])
+   {zp=verges[i].f[j-1][2];}
    else
-   {z=samePrism[i].f[j][2];}
+   {zp=verges[i].f[j][2];}
   }
  }
  else
  {
-  z=-1*(samePrism[i].A*xCen+samePrism[i].B*yCen+samePrism[i].D)/samePrism[i].C;
+  zp=-1*(verges[i].A*xCen+verges[i].B*yCen+verges[i].D)/verges[i].C;
  }
- return z;
+ return zp;
 }
 void __fastcall TForm1::Image1MouseMove(TObject *Sender,
       TShiftState Shift, int X, int Y)
@@ -914,4 +961,13 @@ void __fastcall TForm1::Image1MouseMove(TObject *Sender,
  LabeledEdit1->Text=IntToStr(X)+", " + IntToStr(Y);
 }
 //---------------------------------------------------------------------------
+void copy(double* vp, double* p)
+{
+ for(int j=0;j<4;j++)
+ {
+   vp[j]=p[j]+d;
+ }
+}
+
+
 

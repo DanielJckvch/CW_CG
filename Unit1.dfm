@@ -18,8 +18,8 @@ object Form1: TForm1
   object Image1: TImage
     Left = 0
     Top = 0
-    Width = 550
-    Height = 550
+    Width = 512
+    Height = 512
     OnMouseMove = Image1MouseMove
   end
   object Button1: TButton

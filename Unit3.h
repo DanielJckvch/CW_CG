@@ -15,7 +15,7 @@ struct face
   bool trian;
 };
 
-class faceCont
+class scene
 {
  private:
  face* ob;
