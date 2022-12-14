@@ -47,6 +47,7 @@ void rotandscale(MyPoint* o, bool sw, bool sign);//Поворот и масштабирование
 void prisminit(MyPoint* o);//Инициализация призмы
 void bresline(TColor*, int, int, int, int, int);//Прочерчивание линии алгоритмом Брезенхэиа
 void fillFaceList(void);//Инициализация списка граней
+void fillFaceList1(void);//Инициализация списка граней
 void countCoeffs(void);//Расчёт уравнений нормали граней
 void openBuffer(TImage* Image1);//Открытие буфера для двойной буферизации
 void closeBuffer(void);//Закрытие буфера
@@ -60,14 +61,13 @@ int getFaceNum(int* w);
 int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y);
 double getZ(int* w, int i);
 void copy(double* vp, double* p);
+void pyrinit(MyPoint* o);
 
-//void isCover(void);
 
 vector<int> stack;
 MyPoint* prism=new MyPoint[6];
-MyPoint* prismGab=new MyPoint[2];
+MyPoint* vergeGab=new MyPoint[2];
 MyPoint* pyr=new MyPoint[4];
-//face* samePrism=new face[6];
 face* verges=new face[6];//Добавить удаление
 double prismProj[6][4];
 double pyrProj[4][4];
@@ -77,10 +77,10 @@ TColor* buff=0;
 BITMAPINFO info;
 
 double h=50.0;
-double pyrEdge=50;
+double pyrEdge=200;
 double pyrH=pyrEdge*0.866;
 int d=200;
-double z_plane=100.0;
+double z_plane=50.0;
 double z=500.0;
 
 double a_step=10;
@@ -89,6 +89,7 @@ int mov_step=10;
 
 int axis_mode=0;
 int proj_mode=0;
+int fig_proc_mode=0;
 
 //---------------------------------------------------------------------------
 __fastcall TForm1::TForm1(TComponent* Owner)
@@ -98,17 +99,16 @@ __fastcall TForm1::TForm1(TComponent* Owner)
 //---------------------------------------------------------------------------
 void __fastcall TForm1::Form1Create(TObject *Sender)
 {
-
 //Инициализация и вывод шестиугольнка
 //Подготовка bitmap
-prisminit(prism);
+pyrinit(pyr);
 TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
 //Вывод призмы
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 Edit1->Text="X";
 Edit2->Text="Isometric";
 closeBuffer();
@@ -118,7 +118,7 @@ closeBuffer();
 void __fastcall TForm1::Button1Click(TObject *Sender)
 {
 //Поворот против часовой стрелки
-rotandscale(prism, 0, 1);
+rotandscale(pyr, 0, 1);
 //Очистка холста
 TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
@@ -126,7 +126,7 @@ Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
  //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -134,7 +134,7 @@ closeBuffer();
 void __fastcall TForm1::Button2Click(TObject *Sender)
 {
 //Поворот по часовой стрелке
-rotandscale(prism, 0, 0);
+rotandscale(pyr, 0, 0);
 //Очистка холста
 TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
@@ -142,7 +142,7 @@ Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
  //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -150,7 +150,7 @@ closeBuffer();
 void __fastcall TForm1::Button3Click(TObject *Sender)
 {
 //Масштаб -
-rotandscale(prism, 1, 1);
+rotandscale(pyr, 1, 1);
 //Очистка холста
 TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
@@ -158,7 +158,7 @@ Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
  //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -166,7 +166,7 @@ closeBuffer();
 void __fastcall TForm1::Button4Click(TObject *Sender)
 {
 //Масштаб +
-rotandscale(prism, 1, 0);
+rotandscale(pyr, 1, 0);
 //Очистка холста
 TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
@@ -174,7 +174,7 @@ Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
  //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -185,19 +185,19 @@ void __fastcall TForm1::Button5Click(TObject *Sender)
 switch(axis_mode)
 {
 case 0:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_x(prism[i].get_x()-mov_step);
 }
 break;
 case 1:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_y(prism[i].get_y()-mov_step);
 }
 break;
 case 2:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_z(prism[i].get_z()-mov_step);
 }
@@ -222,19 +222,19 @@ void __fastcall TForm1::Button6Click(TObject *Sender)
 switch(axis_mode)
 {
 case 0:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_x(prism[i].get_x()+mov_step);
 }
 break;
 case 1:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_y(prism[i].get_y()+mov_step);
 }
 break;
 case 2:
-for(int i=0; i<6; i++)
+for(int i=0; i<4+fig_proc_mode*2; i++)
 {
  prism[i].set_z(prism[i].get_z()+mov_step);
 }
@@ -296,7 +296,7 @@ Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
 //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(pyr, Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -324,6 +324,7 @@ per[1][0]=0;per[1][1]=1;per[1][2]=0;per[1][3]=0;
 per[2][0]=0;per[2][1]=0;per[2][2]=1;per[2][3]=-z_plane;
 per[3][0]=0;per[3][1]=0;per[3][2]=0;per[3][3]=1;
 //Выбор проекционного преобразования
+
 switch(proj_mode)
 {
 case 0:
@@ -352,7 +353,7 @@ proj[3][0]=0;proj[3][1]=0;proj[3][2]=0;proj[3][3]=1;
  break;
 }
 
-for(k=0;k<6;k++)
+for(k=0;k<4+fig_proc_mode*2;k++)
 {
 
 double v1[4]={o[k].get_x(),o[k].get_y(),o[k].get_z(),1};
@@ -390,7 +391,7 @@ for (int i = 0;i < 4;i++)
 //Проверка на выход точки за холст
 if(v2[0]+d<0||v2[0]+d>Image1->Width||v2[1]+d<0||v2[1]+d>Image1->Height)
 {
-for(int i=0;i<6;i++)
+for(int i=0;i<4+fig_proc_mode*2;i++)
 {o[i].set_x();
 o[i].set_y();
 o[i].set_z();
@@ -404,69 +405,52 @@ prismProj[k][3]= v2[3];
 
 }
 
- fillFaceList();
+ fillFaceList1();
  countCoeffs();
- //getGab();
- //TColor* p= new TColor[1];
  print1(buff,Image1->Width);
  int facecenter[2]={0};
-
+  /*
  for(int i=0;i<5;i++)
  {
  if(verges[i].toPrint)
  {
-
+ /*
  if(!verges[i].trian)
  {//Отрисовка контура четырёхугольных граней
  bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
  bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
  bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[3][0],verges[i].f[3][1]);
  bresline(buff,Image1->Width,verges[i].f[3][0],verges[i].f[3][1],verges[i].f[0][0],verges[i].f[0][1]);
- //Заливка граней
-  /*
- facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d+samePrism[i].f[3][0]+d)/4;
- facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d+samePrism[i].f[3][1]+d)/4;
- surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
- */
  }
  else
  {//Отрисовка контура треугольных граней
+ /*
  bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
  bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
  bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[0][0],verges[i].f[0][1]);
- //Заливка треугольных граней
- /*
- facecenter[0]=(samePrism[i].f[0][0]+d+samePrism[i].f[1][0]+d+samePrism[i].f[2][0]+d)/3;
- facecenter[1]=(samePrism[i].f[0][1]+d+samePrism[i].f[1][1]+d+samePrism[i].f[2][1]+d)/3;
- surfaceFill(buff,samePrism[i].color,0,Image1->Width,facecenter[0],facecenter[1]);
-  */
+
  }
  verges[i].A=0.0;
  verges[i].B=0.0;
  verges[i].C=0.0;
  verges[i].D=0.0;
  }
- }
+ }  */
  //Вывод буфера на экран
  SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
  //Обозначение вершин буквами
- for(int i=0;i<5;i++)
+ for(int i=0;i<4+fig_proc_mode;i++)
  {
- if(verges[i].toPrint)
+ if(!verges[i].toPrint)
  {
  int off_x;//Смещение буквы по x
  int off_y;//Смещение буквы по y
- for(int j=0;j<3+!verges[i].trian;j++)
+ for(int j=0;j<3;j++)
  {
  //Вычисление смещений
  off_x=(prismProj[verges[i].index[j]][0]<bariocenter[0])?-10:8;
  off_y=(prismProj[verges[i].index[j]][1]<bariocenter[1])?-12:2;
- /*
- if(samePrism[i].index[j]>2)
- {off_y=(prismProj[verges[i].index[j]][1]>prismProj[verges[i].index[j]-3][1])?12:-2;}
- else
- {off_y=(prismProj[vergesi].index[j]][1]<prismProj[verges[i].index[j]+3][1])?-12:2;}
- */
+
  //Вывод букв
  Image1->Canvas->TextOutA(verges[i].f[j][0]+off_x,verges[i].f[j][1]+off_y,o[verges[i].index[j]].get_let());
  }
@@ -483,46 +467,46 @@ void rotandscale(MyPoint* o, bool sw, bool sign)
 double s=sc_step;
 double a=a_step;
 if(sign)
-{ a=a*(-1);
-s=1/s;
+{
+ a=a*(-1);
+ s=1/s;
 }
 double r[4][4];
 // Выбор способа преобразования
-if(sw)
-{
-r[0][0]=s; r[0][1]=0; r[0][2]=0; r[0][3]=0;
-r[1][0]=0; r[1][1]=s; r[1][2]=0; r[1][3]=0;
-r[2][0]=0; r[2][1]=0; r[2][2]=s; r[2][3]=0;
-r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
+ if(sw)
+ {
+  r[0][0]=s; r[0][1]=0; r[0][2]=0; r[0][3]=0;
+  r[1][0]=0; r[1][1]=s; r[1][2]=0; r[1][3]=0;
+  r[2][0]=0; r[2][1]=0; r[2][2]=s; r[2][3]=0;
+  r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
  }
  else
  {
  switch(axis_mode)
  {
- case 0:
- r[0][0]=1; r[0][1]=0; r[0][2]=0; r[0][3]=0;
- r[1][0]=0; r[1][1]=cos(a*3.14/180); r[1][2]=sin(a*3.14/180); r[1][3]=0;
- r[2][0]=0; r[2][1]=-sin(a*3.14/180); r[2][2]=cos(a*3.14/180); r[3][3]=0;
- r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
- break;
- case 1:
- r[0][0]=cos(a*3.14/180); r[0][1]=0; r[0][2]=-sin(a*3.14/180); r[0][3]=0;
- r[1][0]=0; r[1][1]=1; r[1][2]=0; r[1][3]=0;
- r[2][0]=sin(a*3.14/180); r[2][1]=0; r[2][2]=cos(a*3.14/180); r[3][3]=0;
- r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
- break;
- case 2:
- r[0][0]=cos(a*3.14/180); r[0][1]=sin(a*3.14/180); r[0][2]=0; r[0][3]=0;
- r[1][0]=-sin(a*3.14/180); r[1][1]=cos(a*3.14/180); r[1][2]=0; r[1][3]=0;
- r[2][0]=0; r[2][1]=0; r[2][2]=1; r[3][3]=0;
- r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
- break;
-
+  case 0:
+   r[0][0]=1; r[0][1]=0; r[0][2]=0; r[0][3]=0;
+   r[1][0]=0; r[1][1]=cos(a*3.14/180); r[1][2]=sin(a*3.14/180); r[1][3]=0;
+   r[2][0]=0; r[2][1]=-sin(a*3.14/180); r[2][2]=cos(a*3.14/180); r[3][3]=0;
+   r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
+   break;
+  case 1:
+   r[0][0]=cos(a*3.14/180); r[0][1]=0; r[0][2]=-sin(a*3.14/180); r[0][3]=0;
+   r[1][0]=0; r[1][1]=1; r[1][2]=0; r[1][3]=0;
+   r[2][0]=sin(a*3.14/180); r[2][1]=0; r[2][2]=cos(a*3.14/180); r[3][3]=0;
+   r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
+   break;
+  case 2:
+   r[0][0]=cos(a*3.14/180); r[0][1]=sin(a*3.14/180); r[0][2]=0; r[0][3]=0;
+   r[1][0]=-sin(a*3.14/180); r[1][1]=cos(a*3.14/180); r[1][2]=0; r[1][3]=0;
+   r[2][0]=0; r[2][1]=0; r[2][2]=1; r[3][3]=0;
+   r[3][0]=0; r[3][1]=0; r[3][2]=0; r[3][3]=1;
+   break;
  }
  }
  int k=0;
 // Преобразование точек
-for(k=0;k<6;k++)
+for(k=0;k<4+fig_proc_mode*2;k++)
 {
 double v1[4]={o[k].get_x(),o[k].get_y(),o[k].get_z(),1};
 double v2[4]={0, 0, 0, 1};
@@ -532,9 +516,8 @@ for (i = 0;i < 4;i++)
         double sum = 0;
         for (j = 0;j < 4;j++)
         {
-                sum= sum+ (r[j][i] * v1[j]);
+         sum= sum+ (r[j][i] * v1[j]);
         }
-
         v2[i] = sum;
 }
 o[k].set_x(v2[0]);
@@ -555,10 +538,10 @@ void prisminit(MyPoint* o)
 
 void pyrinit(MyPoint* o)
 {
-  o[0]=MyPoint('A',0.0,0.0,0);
-  o[1]=MyPoint(char('A'+1),0.0,50.0,0);
-  o[2]=MyPoint(char('A'+2),pyrH,pyrEdge/2,0);
-  o[3]=MyPoint(char('A'+3),200.0,0.0,-1*pyrH);
+  o[0]=MyPoint(char('A'),0.0,pyrEdge/1.73205,0);
+  o[1]=MyPoint(char('A'+1),(pyrEdge/1.73205)*0.86603,(pyrEdge/1.73205)*-0.5,0);
+  o[2]=MyPoint(char('A'+2),(pyrEdge/1.73205)*-0.86603,(pyrEdge/1.73205)*-0.5,0);
+  o[3]=MyPoint(char('A'+3),0.0,0.0,pyrH);
 }
 //---------------------------------------------------------------------------
 
@@ -676,7 +659,7 @@ long int v2[3];
 bariocenter[0]=0;
 bariocenter[1]=0;
 bariocenter[2]=0;
- for(int j=0;j<6;j++)
+ for(int j=0;j<4;j++)
  {
  bariocenter[0]=bariocenter[0]+prismProj[j][0];
  }
@@ -692,7 +675,7 @@ bariocenter[2]=0;
  }
  bariocenter[2]=bariocenter[2]/6;
  //Вычисление векторов нормали
-for(int i=0;i<5;i++)
+for(int i=0;i<4+fig_proc_mode;i++)
 {
 for(int j=0;j<3;j++)
 {
@@ -705,7 +688,7 @@ verges[i].B=v2[0]*v1[2]-v1[0]*v2[2];
 verges[i].C=v1[0]*v2[1]-v1[1]*v2[0];
 verges[i].D=-1*(verges[i].A*verges[i].f[0][0]+verges[i].B*verges[i].f[0][1]+verges[i].C*verges[i].f[0][2]);
 //Поворот векторов внутрь призмы
-double sum=(verges[i].A+verges[i].B+verges[i].C+verges[i].D)*(bariocenter[0]+bariocenter[1]+bariocenter[2]+1);
+//double sum=(verges[i].A+verges[i].B+verges[i].C+verges[i].D)*(bariocenter[0]+bariocenter[1]+bariocenter[2]+1);
  
 }
 }
@@ -747,7 +730,7 @@ void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, in
 
 void print1(TColor* frame, int imSize)
 {
-int N=5;
+int N=4+fig_proc_mode;
 int out=0;
 int faceNum=0;
 int window[] = {0,0,0};
@@ -764,10 +747,8 @@ while(!stack.empty())
   stack.pop_back();
   window[0]=stack.back();
   stack.pop_back();
-  int a =stack.empty();
   imSize=window[2];
   out=0;
-
   for(int i=0;i<N && out==0;i++)
   {
    out = isOuter(window,i);
@@ -800,18 +781,10 @@ while(!stack.empty())
     faceNum=getFaceNum(window);
     if(faceNum!=-1)
     {
-    if(faceNum==0)
-     {a=7;}
      frame[window[0]+(window[1])*width]=verges[faceNum].color;
     }
-
-    else
-    {frame[window[0]+(window[1])*width]=0xFFFFFFFF;}
-    //Вывести многоугольник
    }
   }
-  //else
-  //{windowFill(frame,window, window[0],window[1], 0xFFFFFFFF);}
 }
 
 }
@@ -834,10 +807,10 @@ int isOuter(int* w, int i)
   int yu = w[1]+w[2]-1;
   int out=1;
   getGab(i);
-  if(prismGab[0].get_x()>xr){out=0;}
-  if(prismGab[1].get_x()<xl){out=0;}
-  if(prismGab[0].get_y()>yu){out=0;}
-  if(prismGab[1].get_y()<yd){out=0;}
+  if(vergeGab[0].get_x()>xr){out=0;}
+  if(vergeGab[1].get_x()<xl){out=0;}
+  if(vergeGab[0].get_y()>yu){out=0;}
+  if(vergeGab[1].get_y()<yd){out=0;}
   return out;
 }
 
@@ -847,7 +820,7 @@ void getGab(int i)
   int xMax=verges[i].f[0][0];
   int yMin=verges[i].f[0][1];
   int yMax=verges[i].f[0][1];
-  for(int j=0;j<4-verges[i].trian;j++)
+  for(int j=0;j<4+fig_proc_mode*1;j++)
   {
     if(xMin>verges[i].f[j][0])
     {xMin=verges[i].f[j][0];}
@@ -858,17 +831,15 @@ void getGab(int i)
     if(yMax<verges[i].f[j][1])
     {yMax=verges[i].f[j][1];}
   }
-  prismGab[0].set_x(xMin);
-  prismGab[0].set_y(yMin);
-  prismGab[1].set_x(xMax);
-  prismGab[1].set_y(yMax);
+  vergeGab[0].set_x(xMin);
+  vergeGab[0].set_y(yMin);
+  vergeGab[1].set_x(xMax);
+  vergeGab[1].set_y(yMax);
 }
 /*Нумерация вершин(с внешней строны грани ACDF): 1-левая нижняя,
 2-правая нижняя, 3-левая верхняя, 4-правая верхняя*/
 int getFaceNum(int* w)
 {
- if(w[0]==200&&w[1]==282)
- {int c=0;}
  int faceNum=-1;
  int vis=-2;
  double zMax=-100000.0;
@@ -876,26 +847,22 @@ int getFaceNum(int* w)
  double xCen=w[0]+w[2]/2;
  double yCen=w[1]+w[2]/2;
  double z=0;
- int N=5;
+ int N=4+fig_proc_mode*1;
  int k=0;
  for(int i=0;i<N;i++)
  { //5=6-1 - кол-во точек в призме
    int j=0;
    while(j<3-verges[i].trian)
    {
-
     p1x=verges[i].f[j][0];
     p1y=verges[i].f[j][1];
     p2x=verges[i].f[j+1][0];
     p2y=verges[i].f[j+1][1];
-
     if(vis==-2)
     {
      vis=isVisible(xCen, yCen, p1x, p1y, p2x, p2y);
-     j++;
-     continue;
     }
-    if(vis!=isVisible(xCen, yCen, p1x, p1y, p2x, p2y))
+    else if(vis!=isVisible(xCen, yCen, p1x, p1y, p2x, p2y))
     {
      vis=-2;
      break;
@@ -941,7 +908,7 @@ double getZ(int* w, int i)
  double yCen=w[1]+w[2]/2;
  if(verges[i].C==0.0)
  {//также для призмы
-  for(int j=1;j<4-verges[i].trian;j++)
+  for(int j=1;j<4+fig_proc_mode*2;j++)
   {
    if(verges[i].f[j][2]<verges[i].f[j-1][2])
    {zp=verges[i].f[j-1][2];}
@@ -969,5 +936,78 @@ void copy(double* vp, double* p)
  }
 }
 
+void fillFaceList1(void)
+{
+ //Заполнение списка граней
 
+for(int i=0;i<3;i++)
+{
+  //Внесение в список основания
+  copy(verges[0].f[i], prismProj[i]);
+  verges[0].index[i]=i;
+  verges[0].trian=true;
+}
+
+//Внесение в список боковых сторон
+/**/
+for(int k=1;k<3;k++)
+{
+ for(int i=0;i<3;i++)
+ {
+
+  if(i==1)
+  {
+   copy(verges[k].f[i], prismProj[3]);
+   verges[k].index[i]=3;
+  }
+  else if(i==0)
+  {
+   copy(verges[k].f[i], prismProj[i+k-1]);
+   verges[k].index[i]=i+k-1;
+  }
+  else
+  {
+   copy(verges[k].f[i], prismProj[i+k-2]);
+   verges[k].index[i]=i+k-2;
+  }
+ }
+ verges[k].trian=true;
+}
+ //Грань замыкающая
+ copy(verges[3].f[0], prismProj[2]);
+ verges[3].index[0]=2;
+ copy(verges[3].f[1], prismProj[3]);
+ verges[3].index[1]=3;
+ copy(verges[3].f[2], prismProj[0]);
+ verges[3].index[2]=0;
+ verges[3].trian=true;
+
+
+ //Инициализация цвета поверхности
+ verges[0].color=0x00FF00ff;//Фиолетовый
+ verges[1].color=0x00FF0000;//Красный
+ verges[2].color=0x0000FF00;//Зелёный
+ verges[3].color=0x000000FF;//Синий
+ //verges[4].color=0x00FFFF00;//Жёлтый
+}
+//---------------------------------------------------------------------------
+
+void __fastcall TForm1::Button9Click(TObject *Sender)
+{
+ //Выбор обрабатываемой фигуры
+ if(--fig_proc_mode==-1)
+ {
+  fig_proc_mode=1;
+ }
+ switch(fig_proc_mode)
+ {
+  case 0:
+   Edit3->Text="Pyramid";
+   break;
+  case 1:
+   Edit3->Text="Prism";
+   break;
+  }
+}
+//---------------------------------------------------------------------------
 
