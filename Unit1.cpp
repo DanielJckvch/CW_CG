@@ -5,7 +5,7 @@
 
 #include "Unit1.h"
 #include "Unit2.h"
-//#include "Unit4.h"
+#include "Unit3.h"
 #include <math.h>
 #include <vector>
 //---------------------------------------------------------------------------
@@ -14,35 +14,7 @@
 using namespace std;
 TForm1 *Form1;
 //Призма. Поворот и перенос вокруг всех осей, масштабирование, закраска и удаление невидимых поверхностей
-//Доделать буквы и тени, убрать указатель на номер точки на экране(Labeled edit 3), вынести функции в файл
-struct face
-{
-  double** f;
-  double A;
-  double B;
-  double C;
-  double D;
-  int index[4];
-  unsigned int color;
-  bool toPrint;
-  bool trian;
-  face(void)
-  {
-   f=new double*[6];
-   for(int i=0;i<6;i++)
-   {
-    f[i]=new double[4];
-   }
-  }
-  ~face()
-  {
-   for(int i=0;i<4;i++)
-   {
-    delete[] f[i];
-   }
-   delete[] f;
-  }
-};
+//Доделать тени, убрать указатель на номер точки на экране(Labeled edit 3), вынести функции в файл,
 void print(MyPoint* o, TImage* Image1);//Печатание призмы
 void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign);//Поворот и масштабирование
 void prisminit(MyPoint* o);//Инициализация призмы
@@ -56,7 +28,7 @@ void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, in
 void windowFill(TColor* frame, int* w, int x, int y, unsigned int color=0xFFFFFFFF);
 int isOuter(int* w, int i);
 void getGab(int i);
-int getFaceNum(int* w);
+int getFaceNum(int* w, double* zMaxIn=0);
 int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y);
 double getZ(int* w, int i);
 void copy(double* vp, double* p);
@@ -65,13 +37,11 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum);
 
 
 MyPoint* prism;
-MyPoint* vergeGab;
 MyPoint* pyr;
 face* prismVerges;
 face* pyrVerges;
 double** prismProj;
 double** pyrProj;
-long int bariocenter[3];
 
 TColor* buff=0;
 BITMAPINFO info;
@@ -103,7 +73,6 @@ void __fastcall TForm1::Form1Create(TObject *Sender)
 {
 //Создание контейнеров значений точек
 prism=new MyPoint[6];
-vergeGab=new MyPoint[2];
 pyr=new MyPoint[4];
 prismVerges=new face[6];
 pyrVerges=new face[4];
@@ -130,6 +99,8 @@ getProjection(Image1,pyr,pyrProj,4);
 getProjection(Image1,prism,prismProj,6);
 fillFaceList(0);
 fillFaceList(1);
+getGab(0);
+getGab(1);
 countCoeffs(pyrVerges, 4,4);
 countCoeffs(prismVerges, 6,5);
 //Вывод фигур
@@ -169,6 +140,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
@@ -204,6 +176,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
@@ -239,6 +212,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
@@ -274,6 +248,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
@@ -330,6 +305,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
 //Отрисовка
 openBuffer(Image1);
@@ -385,6 +361,7 @@ Image1->Canvas->FillRect(rct);
 //Расчёт проекций и граней
 getProjection(Image1,ob,obProj,pointNum);
 fillFaceList(fig_proc_mode);
+getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
 //Отрисовка
 openBuffer(Image1);
@@ -416,6 +393,21 @@ break;
 void __fastcall TForm1::Button8Click(TObject *Sender)
 {
 //Переключение режима проекции
+double** obProj;
+face* obVerges;
+MyPoint* ob;
+if(fig_proc_mode==0)
+{
+ obProj=pyrProj;
+ obVerges=pyrVerges;
+ ob=pyr;
+}
+else
+{
+ obProj=prismProj;
+ obVerges=prismVerges;
+ ob=prism;
+}
 if(++proj_mode==3)
 {proj_mode=0;}
 switch(proj_mode)
@@ -435,6 +427,15 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
+//Расчёт проекций и граней
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
 //Отрисовка
 openBuffer(Image1);
 print(pyr, Image1);
@@ -450,14 +451,14 @@ void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
     delete[] prism;
     delete[] prismVerges;
  delete[] pyrVerges;
- delete[] vergeGab;
+ //delete[] vergeGab;
  delete[] pyr;
  for(int i=0;i<6;i++)
  {
   delete [] prismProj[i];
  }
  delete [] prismProj;
- for(int i=0;i<6;i++)
+ for(int i=0;i<4;i++)
  {
   delete[] pyrProj[i];
  }
@@ -565,26 +566,30 @@ while(!stack.empty())
  //Вывод буфера на экран
  SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
  //Обозначение вершин буквами
- /*
- for(int i=0;i<4+fig_proc_mode;i++)
+ face* verges=pyrVerges;
+ MyPoint* ob=pyr;
+ int letPoint[3]={0,0,1};
+ double zMax=0;
+ for(int i=0;i<5;i++)
  {
- if(!verges[i].toPrint)
- {
- int off_x;//Смещение буквы по x
- int off_y;//Смещение буквы по y
- for(int j=0;j<3;j++)
- {
- //Вычисление смещений
- off_x=(prismProj[verges[i].index[j]][0]<bariocenter[0])?-10:8;
- off_y=(prismProj[verges[i].index[j]][1]<bariocenter[1])?-12:2;
-
- //Вывод букв
- Image1->Canvas->TextOutA(verges[i].f[j][0]+off_x,verges[i].f[j][1]+off_y,o[verges[i].index[j]].get_let());
+  if(i>3&&verges==pyrVerges)
+  {
+   i-=4;
+   verges=prismVerges;
+   ob=prism;
+  }
+  for(int j=0;j<4-verges[i].trian;j++)
+  {
+   letPoint[0]=verges[i].f[j][0];
+   letPoint[1]=verges[i].f[j][1];
+   getFaceNum(letPoint, &zMax);
+   //Если буква не перекрывается какой-либо гранью, она должна быть выведена
+   if(verges[i].f[j][2]>=zMax-2)
+   {
+    Image1->Canvas->TextOutA(verges[i].f[j][0],verges[i].f[j][1],ob[verges[i].index[j]].get_let());
+   }
+  }
  }
- verges[i].trian=false;
- verges[i].toPrint=false;
- }
- } */
 
 }
 //---------------------------------------------------------------------------
@@ -655,9 +660,9 @@ void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign)
 //----------------------------------------------------------------------------
 void prisminit(MyPoint* o)
 {
-  o[0]=MyPoint('A',0.0,200.0,h/2);
-  o[1]=MyPoint(char('A'+1),0.0,0.0,h/2);
-  o[2]=MyPoint(char('A'+2),200.0,0.0,h/2);
+  o[0]=MyPoint('A',0.0,200.0,-h/2);
+  o[1]=MyPoint(char('A'+1),0.0,0.0,-h/2);
+  o[2]=MyPoint(char('A'+2),200.0,0.0,-h/2);
  for(int i=3; i<6; i++)
  {
  o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h);
@@ -823,8 +828,8 @@ for(int k=1;k<3;k++)
  verges[3].index[2]=0;
  verges[3].trian=true;
  //Инициализация цвета поверхности
- verges[0].color=0x00FF00FF;//Фиолетовый
- verges[1].color=0x00FF0000;//Красный
+ verges[0].color=0x00FF0000;//Красный
+ verges[1].color=0x00FF00FF;//Фиолетовый
  verges[2].color=0x0000FF00;//Зелёный
  verges[3].color=0x000000FF;//Синий
  //verges[4].color=0x00FFFF00;//Жёлтый
@@ -834,29 +839,9 @@ for(int k=1;k<3;k++)
 
 void countCoeffs(face* verges, int pointNum,int vergesNum)
 {
-
 //Расчёт коэффициентов уравнения плоскостей
-long int v1[3];
-long int v2[3];
-//Вычисление центра тяжести
-bariocenter[0]=0;
-bariocenter[1]=0;
-bariocenter[2]=0;
- for(int j=0;j<pointNum;j++)
- {
- bariocenter[0]=bariocenter[0]+prismProj[j][0];
- }
- bariocenter[0]=bariocenter[0]/pointNum;
- for(int j=0;j<pointNum;j++)
- {
- bariocenter[1]=bariocenter[1]+prismProj[j][1];
- }
- bariocenter[1]=bariocenter[1]/pointNum;
- for(int j=0;j<pointNum;j++)
- {
- bariocenter[2]=bariocenter[2]+prismProj[j][2];
- }
- bariocenter[2]=bariocenter[2]/pointNum;
+double v1[3];
+double v2[3];
  //Вычисление векторов нормали
  for(int i=0;i<vergesNum;i++)
  {
@@ -920,26 +905,36 @@ void windowFill(TColor* frame, int* w, int x, int y, unsigned int color)
  }
 }
 int isOuter(int* w, int i)
-{ int xl = w[0];
+{
+  face* verges;
+  if(i>3)
+  {
+   i-=4;
+   verges=prismVerges;
+  }
+  else
+  {
+   verges=pyrVerges;
+  }
+  int xl = w[0];
   int xr = w[0]+w[2]-1;
   int yd = w[1];
   int yu = w[1]+w[2]-1;
   int out=1;
-  getGab(i);
-  if(vergeGab[0].get_x()>xr){out=0;}
-  if(vergeGab[1].get_x()<xl){out=0;}
-  if(vergeGab[0].get_y()>yu){out=0;}
-  if(vergeGab[1].get_y()<yd){out=0;}
+  //getGab(i);
+  if(verges[i].gab[0]>xr){out=0;}
+  if(verges[i].gab[1]<xl){out=0;}
+  if(verges[i].gab[2]>yu){out=0;}
+  if(verges[i].gab[3]<yd){out=0;}
   return out;
 }
 
-void getGab(int i)
+void getGab(int fig)
 {
   face* verges;
   int N;
-  if(i>3)
+  if(fig==1)
   {
-   i-=4;
    verges=prismVerges;
    N=6;
   }
@@ -948,31 +943,28 @@ void getGab(int i)
    verges=pyrVerges;
    N=4;
   }
-  double xMin=verges[i].f[0][0];
-  double xMax=verges[i].f[0][0];
-  double yMin=verges[i].f[0][1];
-  double yMax=verges[i].f[0][1];
-  for(int j=0;j<N;j++)
+  for(int i=0;i<N;i++)
   {
-    if(xMin>verges[i].f[j][0])
-    {xMin=verges[i].f[j][0];}
-    if(xMax<verges[i].f[j][0])
-    {xMax=verges[i].f[j][0];}
-    if(yMin>verges[i].f[j][1])
-    {yMin=verges[i].f[j][1];}
-    if(yMax<verges[i].f[j][1])
-    {yMax=verges[i].f[j][1];}
+    for(int j=0;j<4-verges[i].trian;j++)
+    {
+     if(verges[i].gab[0]>verges[i].f[j][0])
+     {verges[i].gab[0]=verges[i].f[j][0];}
+     if(verges[i].gab[1]<verges[i].f[j][0])
+     {verges[i].gab[1]=verges[i].f[j][0];}
+     if(verges[i].gab[2]>verges[i].f[j][1])
+     {verges[i].gab[2]=verges[i].f[j][1];}
+     if(verges[i].gab[3]<verges[i].f[j][1])
+     {verges[i].gab[3]=verges[i].f[j][1];}
+    }
   }
-  vergeGab[0].set_x(xMin);
-  vergeGab[0].set_y(yMin);
-  vergeGab[1].set_x(xMax);
-  vergeGab[1].set_y(yMax);
 }
 /*Нумерация вершин(с внешней строны грани ACDF): 1-левая нижняя,
 2-правая нижняя, 3-левая верхняя, 4-правая верхняя*/
-int getFaceNum(int* w)
+int getFaceNum(int* w, double* zMaxIn)
 {
  face* verges=pyrVerges;
+ if(w[0]==200&&w[1]==260)
+ {int c=0;}
  int faceNum=-1;
  int vis=-2;
  double zMax=-100000.0;
@@ -1023,8 +1015,14 @@ int getFaceNum(int* w)
    }
    vis=-2;
  }
+ if(zMaxIn)
+ {
+  *zMaxIn=zMax;
+ }
  return faceNum;
 }
+
+
 
 int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y)
 {
@@ -1036,7 +1034,7 @@ int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y
  }
  return vis;
 }
-
+//----------------------------------------------------------------------------
 double getZ(int* w, int i)
 {
   face* verges;
@@ -1093,7 +1091,7 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
  double a; //x
  double b; //y
  double proj[4][4];//Матрица проекции
- double per[4][4];//Матрица перспективы
+ double per[4][4]={0};//Матрица перспективы
 //Выбор проекционного преобразования
  switch(proj_mode)
  {
@@ -1142,7 +1140,7 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
   {
    int i, j;
    //Перспективное преобразование
-   for(int i=0;i<2;i++)
+   for(int i=0;i<4;i++)
    {
     per[i][i]=(z-z_plane)/(z-o[k].get_z());
    }
@@ -1176,7 +1174,6 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
  }
 }
 //---------------------------------------------------------------------------
-
 void __fastcall TForm1::Button9Click(TObject *Sender)
 {
  //Выбор обрабатываемой фигуры
