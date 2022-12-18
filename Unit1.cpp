@@ -15,7 +15,7 @@ using namespace std;
 TForm1 *Form1;
 //Призма. Поворот и перенос вокруг всех осей, масштабирование, закраска и удаление невидимых поверхностей
 //Доделать тени, убрать указатель на номер точки на экране(Labeled edit 3), вынести функции в файл,
-void print(MyPoint* o, TImage* Image1);//Печатание призмы
+void print(TImage* Image1);//Печатание призмы
 void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign);//Поворот и масштабирование
 void prisminit(MyPoint* o);//Инициализация призмы
 void bresline(TColor*, int, int, int, int, int);//Прочерчивание линии алгоритмом Брезенхэиа
@@ -34,6 +34,7 @@ double getZ(int* w, int i);
 void copy(double* vp, double* p);
 void pyrinit(MyPoint* o);
 void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum);
+void makeShadow(TImage* Image1);
 
 
 MyPoint* prism;
@@ -42,16 +43,20 @@ face* prismVerges;
 face* pyrVerges;
 double** prismProj;
 double** pyrProj;
+int light[3]={100,100,1000000};//200 is d
 
 TColor* buff=0;
+//TColor* zBuff=0;
 BITMAPINFO info;
 
 double h=50.0;
+double prismEdge=200;
 double pyrEdge=200;
 double pyrH=pyrEdge*0.866;
 int d=200;
 double z_plane=50.0;
 double z=500.0;
+double ySdw=150.0;
 
 double a_step=10;
 int sc_step=2;
@@ -77,6 +82,7 @@ pyr=new MyPoint[4];
 prismVerges=new face[6];
 pyrVerges=new face[4];
 prismProj=new double*[6];
+//zBuff=new TColor[Image1->Height*Image1->Width];
 for(int i=0;i<6;i++)
 {
  prismProj[i]=new double[4];
@@ -105,7 +111,8 @@ countCoeffs(pyrVerges, 4,4);
 countCoeffs(prismVerges, 6,5);
 //Вывод фигур
 openBuffer(Image1);
-print(pyr, Image1);
+//makeShadow(Image1);
+print(Image1);
 Edit1->Text="X";
 Edit2->Text="Isometric";
 Edit3->Text="Pyramid";
@@ -144,7 +151,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
-print(pyr, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -180,7 +187,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
-print(pyr, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -216,7 +223,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
-print(pyr, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -252,7 +259,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
  //Отрисовка
 openBuffer(Image1);
-print(pyr, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -309,7 +316,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
 //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -365,7 +372,7 @@ getGab(fig_proc_mode);
 countCoeffs(obVerges,pointNum,vergesNum);
 //Отрисовка
 openBuffer(Image1);
-print(prism, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -438,7 +445,7 @@ countCoeffs(pyrVerges, 4,4);
 countCoeffs(prismVerges, 6,5);
 //Отрисовка
 openBuffer(Image1);
-print(pyr, Image1);
+print(Image1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -448,6 +455,7 @@ void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
     {
      delete buff;
     }
+ //delete[] zBuff;
     delete[] prism;
     delete[] prismVerges;
  delete[] pyrVerges;
@@ -466,7 +474,7 @@ void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
 }
 //---------------------------------------------------------------------------
 
-void print(MyPoint* o, TImage* Image1)
+void print(TImage* Image1)
 {
 vector<int> stack;
 int N=9;
@@ -531,38 +539,15 @@ while(!stack.empty())
       verges=pyrVerges;
      }
      buff[window[0]+(window[1])*Image1->Width]=verges[faceNum].color;
+     if(window[0]+(window[1]+(int)ySdw)*Image1->Width<Image1->Height*Image1->Width)
+     {
+      buff[window[0]+(window[1]+(int)ySdw)*Image1->Width]=0;
+     }
     }
    }
   }
 }
 
-  /*
- for(int i=0;i<5;i++)
- {
- if(verges[i].toPrint)
- {
- /*
- if(!verges[i].trian)
- {//Отрисовка контура четырёхугольных граней
- bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
- bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
- bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[3][0],verges[i].f[3][1]);
- bresline(buff,Image1->Width,verges[i].f[3][0],verges[i].f[3][1],verges[i].f[0][0],verges[i].f[0][1]);
- }
- else
- {//Отрисовка контура треугольных граней
- /*
- bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
- bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
- bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[0][0],verges[i].f[0][1]);
-
- }
- verges[i].A=0.0;
- verges[i].B=0.0;
- verges[i].C=0.0;
- verges[i].D=0.0;
- }
- }  */
  //Вывод буфера на экран
  SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
  //Обозначение вершин буквами
@@ -660,9 +645,9 @@ void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign)
 //----------------------------------------------------------------------------
 void prisminit(MyPoint* o)
 {
-  o[0]=MyPoint('A',0.0,200.0,-h/2);
+  o[0]=MyPoint('A',0.0,prismEdge,-h/2);
   o[1]=MyPoint(char('A'+1),0.0,0.0,-h/2);
-  o[2]=MyPoint(char('A'+2),200.0,0.0,-h/2);
+  o[2]=MyPoint(char('A'+2),prismEdge,0.0,-h/2);
  for(int i=3; i<6; i++)
  {
  o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h);
@@ -883,7 +868,7 @@ buff=0;
 
 void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, int w, int x, int y)
 {
- if((Image[x+y*w]!=brColor)&&(Image[x+y*w]!=fillColor))
+ if((Image[x+y*w]!=brColor)&&(Image[x+y*w]!=fillColor)&&(y*w<512*512)&&x>=0&&y>=0)
  {
  Image[x+y*w]=fillColor;
  surfaceFill(Image, fillColor, brColor, w, x+1, y);
@@ -1011,6 +996,7 @@ int getFaceNum(int* w, double* zMaxIn)
     {
      zMax=z;
      faceNum=k;
+     //zBuff[w[0]+w[1]*Image1->Width]=1;
     }
    }
    vis=-2;
@@ -1197,3 +1183,83 @@ void __fastcall TForm1::Button9Click(TObject *Sender)
 }
 //---------------------------------------------------------------------------
 
+void makeShadow(TImage* Image1)
+{
+ double shadProj[4][4]={{1,0,-1*light[0]/light[2],0},{0,1,-1*light[1]/light[2],ySdw},{0,0,0,0},{0,0,0,1}};
+ double vergeShad[4][3]={0};
+ double vergeShadCen[3]={0};
+ face* verges=pyrVerges;
+ MyPoint* ob=pyr;
+ // Преобразование точек
+ for(int k=0;k<5;k++)
+ {
+  if(k>3&&verges==pyrVerges)
+  {
+   k-=4;
+   verges=prismVerges;
+   ob=prism;
+  }
+  int i=0;
+  for(int i=0;i<4-verges[k].trian;i++)
+  {
+   double v1[4]={verges[k].f[i][0],verges[k].f[i][1],verges[k].f[i][2],1};
+   double v2[4]={0, 0, 0, 1};
+   for (int j = 0;j < 4;j++)
+   {
+        double sum = 0;
+        for (int l = 0;l < 4;l++)
+        {
+         sum= sum+ (shadProj[j][l] * v1[l]);
+        }
+        v2[j] = sum;
+   }
+   vergeShad[i][0]=v2[0];
+   vergeShad[i][1]=v2[1];
+   vergeShad[i][2]=v2[2];
+   vergeShadCen[0]+=vergeShad[i][0];
+   vergeShadCen[1]+=vergeShad[i][1];
+   vergeShadCen[2]+=vergeShad[i][2];
+  }
+  vergeShadCen[0]/=(4-verges[k].trian);
+  vergeShadCen[1]/=(4-verges[k].trian);
+  vergeShadCen[2]/=(4-verges[k].trian);
+  for(i=0;i<(3-verges[k].trian);i++)
+  {
+   bresline(buff,Image1->Width,vergeShad[i][0],vergeShad[i][1],vergeShad[i+1][0],vergeShad[i+1][1]);
+  }
+  bresline(buff,Image1->Width,vergeShad[i][0],vergeShad[i][1],vergeShad[0][0],vergeShad[0][1]);
+  surfaceFill(buff, 0,0, Image1->Width, vergeShadCen[0], vergeShadCen[1]);
+  vergeShadCen[0]=0;
+  vergeShadCen[1]=0;
+  vergeShadCen[2]=0;
+ }
+  /*
+ for(int i=0;i<5;i++)
+ {
+ if(verges[i].toPrint)
+ {
+ /*
+ if(!verges[i].trian)
+ {//Отрисовка контура четырёхугольных граней
+ bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
+ bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
+ bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[3][0],verges[i].f[3][1]);
+ bresline(buff,Image1->Width,verges[i].f[3][0],verges[i].f[3][1],verges[i].f[0][0],verges[i].f[0][1]);
+ }
+ else
+ {//Отрисовка контура треугольных граней
+ /*
+ bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
+ bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
+ bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[0][0],verges[i].f[0][1]);
+
+ }
+ verges[i].A=0.0;
+ verges[i].B=0.0;
+ verges[i].C=0.0;
+ verges[i].D=0.0;
+ }
+ }  */
+ SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
+
+}
