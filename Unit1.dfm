@@ -20,7 +20,6 @@ object Form1: TForm1
     Top = 0
     Width = 512
     Height = 512
-    OnMouseMove = Image1MouseMove
   end
   object Button1: TButton
     Left = 600
@@ -110,26 +109,13 @@ object Form1: TForm1
     TabOrder = 9
     Text = 'Edit2'
   end
-  object LabeledEdit1: TLabeledEdit
-    Left = 672
-    Top = 416
-    Width = 121
-    Height = 21
-    EditLabel.Width = 62
-    EditLabel.Height = 13
-    EditLabel.Caption = 'LabeledEdit1'
-    LabelPosition = lpAbove
-    LabelSpacing = 3
-    TabOrder = 10
-    OnMouseMove = Image1MouseMove
-  end
   object Button9: TButton
     Left = 688
     Top = 288
     Width = 75
     Height = 25
     Caption = #1054#1073#1088' '#1092#1080#1075#1091#1088#1072
-    TabOrder = 11
+    TabOrder = 10
     OnClick = Button9Click
   end
   object Edit3: TEdit
@@ -137,7 +123,7 @@ object Form1: TForm1
     Top = 336
     Width = 81
     Height = 21
-    TabOrder = 12
+    TabOrder = 11
     Text = 'Edit3'
   end
 end

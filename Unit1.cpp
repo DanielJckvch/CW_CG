@@ -14,8 +14,8 @@
 using namespace std;
 TForm1 *Form1;
 //Призма. Поворот и перенос вокруг всех осей, масштабирование, закраска и удаление невидимых поверхностей
-//Доделать тени, убрать указатель на номер точки на экране(Labeled edit 3), вынести функции в файл,
-void print(TImage* Image1);//Печатание призмы
+//Определить поведение при выходе за гран экрана, вынести функции в файл,
+void print(TImage* Image1, int mode=0);//Печатание призмы
 void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign);//Поворот и масштабирование
 void prisminit(MyPoint* o);//Инициализация призмы
 void bresline(TColor*, int, int, int, int, int);//Прочерчивание линии алгоритмом Брезенхэиа
@@ -24,8 +24,6 @@ void countCoeffs(face* verges, int pointNum,int vergesNum);//Расчёт уравнений но
 void openBuffer(TImage* Image1);//Открытие буфера для двойной буферизации
 void closeBuffer(void);//Закрытие буфера
 void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, int w, int x, int y);//Заливка грани
-
-void windowFill(TColor* frame, int* w, int x, int y, unsigned int color=0xFFFFFFFF);
 int isOuter(int* w, int i);
 void getGab(int i);
 int getFaceNum(int* w, double* zMaxIn=0);
@@ -34,39 +32,47 @@ double getZ(int* w, int i);
 void copy(double* vp, double* p);
 void pyrinit(MyPoint* o);
 void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum);
-void makeShadow(TImage* Image1);
+void makeShadow(TImage* Image1,MyPoint* o,MyPoint* sdwOb,double** projObj, int pointNum);
 
-
+//Контейнеры объектов
 MyPoint* prism;
 MyPoint* pyr;
+MyPoint* prismSdw;
+MyPoint* pyrSdw;
 face* prismVerges;
 face* pyrVerges;
 double** prismProj;
 double** pyrProj;
-int light[3]={100,100,1000000};//200 is d
+int light[3]={100,100,2147483648};//200 is d
 
+//Для двойной буферизации
 TColor* buff=0;
-//TColor* zBuff=0;
 BITMAPINFO info;
 
-double h=50.0;
-double prismEdge=200;
-double pyrEdge=200;
+//Размеры объектов
+double h=30.0;
+double prismEdge=50;
+double pyrEdge=50;
 double pyrH=pyrEdge*0.866;
 int d=200;
 double z_plane=50.0;
 double z=500.0;
-double ySdw=150.0;
+int pyrUp=20;
+int prismUp=50;
+int pointNum=4;
+int vergesNum=4;
 
+//Угол поворота, шаг сдвига и коэффициент масштабирования
 double a_step=10;
 int sc_step=2;
 int mov_step=10;
 
+//Режимы обработки объектов
 int axis_mode=0;
 int proj_mode=0;
 int fig_proc_mode=0;
-int pointNum=4;
-int vergesNum=4;
+
+
 
 //---------------------------------------------------------------------------
 __fastcall TForm1::TForm1(TComponent* Owner)
@@ -79,10 +85,11 @@ void __fastcall TForm1::Form1Create(TObject *Sender)
 //Создание контейнеров значений точек
 prism=new MyPoint[6];
 pyr=new MyPoint[4];
+prismSdw=new MyPoint[6];
+pyrSdw=new MyPoint[4];
 prismVerges=new face[6];
 pyrVerges=new face[4];
 prismProj=new double*[6];
-//zBuff=new TColor[Image1->Height*Image1->Width];
 for(int i=0;i<6;i++)
 {
  prismProj[i]=new double[4];
@@ -92,6 +99,7 @@ for(int i=0;i<4;i++)
 {
  pyrProj[i]=new double[4];
 }
+int a=sizeof(int);
 //Инициализация и вывод фигур
 //Подготовка bitmap
 pyrinit(pyr);
@@ -100,7 +108,22 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
+openBuffer(Image1);
+print(Image1);
+//Расчёт проекций и граней для фигур
 getProjection(Image1,pyr,pyrProj,4);
 getProjection(Image1,prism,prismProj,6);
 fillFaceList(0);
@@ -110,9 +133,7 @@ getGab(1);
 countCoeffs(pyrVerges, 4,4);
 countCoeffs(prismVerges, 6,5);
 //Вывод фигур
-openBuffer(Image1);
-//makeShadow(Image1);
-print(Image1);
+print(Image1, 1);
 Edit1->Text="X";
 Edit2->Text="Isometric";
 Edit3->Text="Pyramid";
@@ -123,19 +144,13 @@ closeBuffer();
 void __fastcall TForm1::Button1Click(TObject *Sender)
 {
 //Поворот против часовой стрелки
-double** obProj;
-face* obVerges;
 MyPoint* ob;
 if(fig_proc_mode==0)
 {
- obProj=pyrProj;
- obVerges=pyrVerges;
  ob=pyr;
 }
 else
 {
- obProj=prismProj;
- obVerges=prismVerges;
  ob=prism;
 }
 rotandscale(ob,pointNum, 0, 1);
@@ -144,14 +159,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
- //Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -159,19 +192,13 @@ closeBuffer();
 void __fastcall TForm1::Button2Click(TObject *Sender)
 {
 //Поворот по часовой стрелке
-double** obProj;
-face* obVerges;
 MyPoint* ob;
 if(fig_proc_mode==0)
 {
- obProj=pyrProj;
- obVerges=pyrVerges;
  ob=pyr;
 }
 else
 {
- obProj=prismProj;
- obVerges=prismVerges;
  ob=prism;
 }
 rotandscale(ob,pointNum, 0, 0);
@@ -180,14 +207,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
- //Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -195,19 +240,13 @@ closeBuffer();
 void __fastcall TForm1::Button3Click(TObject *Sender)
 {
 //Масштаб -
-double** obProj;
-face* obVerges;
 MyPoint* ob;
 if(fig_proc_mode==0)
 {
- obProj=pyrProj;
- obVerges=pyrVerges;
  ob=pyr;
 }
 else
 {
- obProj=prismProj;
- obVerges=prismVerges;
  ob=prism;
 }
 rotandscale(ob,pointNum, 1, 1);
@@ -216,14 +255,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
- //Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -231,19 +288,13 @@ closeBuffer();
 void __fastcall TForm1::Button4Click(TObject *Sender)
 {
 //Масштаб +
-double** obProj;
-face* obVerges;
 MyPoint* ob;
 if(fig_proc_mode==0)
 {
- obProj=pyrProj;
- obVerges=pyrVerges;
  ob=pyr;
 }
 else
 {
- obProj=prismProj;
- obVerges=prismVerges;
  ob=prism;
 }
 rotandscale(ob,pointNum, 1, 0);
@@ -252,14 +303,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
- //Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -268,19 +337,13 @@ void __fastcall TForm1::Button5Click(TObject *Sender)
 {
 //Сдвиг против направления оси
 MyPoint* ob;
-double** obProj;
-face* obVerges;
 if(fig_proc_mode==0)
 {
  ob=pyr;
- obProj=pyrProj;
- obVerges=pyrVerges;
 }
 else
 {
  ob=prism;
- obProj=prismProj;
- obVerges=prismVerges;
 }
 switch(axis_mode)
 {
@@ -309,14 +372,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
-//Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -325,19 +406,13 @@ void __fastcall TForm1::Button6Click(TObject *Sender)
 {
 //Сдвиг по направлению оси
 MyPoint* ob;
-double** obProj;
-face* obVerges;
 if(fig_proc_mode==0)
 {
  ob=pyr;
- obProj=pyrProj;
- obVerges=pyrVerges;
 }
 else
 {
  ob=prism;
- obProj=prismProj;
- obVerges=prismVerges;
 }
 switch(axis_mode)
 {
@@ -365,14 +440,32 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
-getProjection(Image1,ob,obProj,pointNum);
-fillFaceList(fig_proc_mode);
-getGab(fig_proc_mode);
-countCoeffs(obVerges,pointNum,vergesNum);
-//Отрисовка
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
 openBuffer(Image1);
 print(Image1);
+//Расчёт проекций и граней для фигур
+getProjection(Image1,pyr,pyrProj,4);
+getProjection(Image1,prism,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
@@ -400,19 +493,13 @@ break;
 void __fastcall TForm1::Button8Click(TObject *Sender)
 {
 //Переключение режима проекции
-double** obProj;
-face* obVerges;
 MyPoint* ob;
 if(fig_proc_mode==0)
 {
- obProj=pyrProj;
- obVerges=pyrVerges;
  ob=pyr;
 }
 else
 {
- obProj=prismProj;
- obVerges=prismVerges;
  ob=prism;
 }
 if(++proj_mode==3)
@@ -434,7 +521,22 @@ TRect rct;
 rct = Rect(0,0,Image1->Width,Image1->Height);
 Image1->Canvas->Brush->Style=bsSolid;
 Image1->Canvas->FillRect(rct);
-//Расчёт проекций и граней
+//Создание тени
+makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+makeShadow(Image1,prism,prismSdw,prismProj,6);
+//Расчёт проекций и граней для тени
+getProjection(Image1,pyrSdw,pyrProj,4);
+getProjection(Image1,prismSdw,prismProj,6);
+fillFaceList(0);
+fillFaceList(1);
+getGab(0);
+getGab(1);
+countCoeffs(pyrVerges, 4,4);
+countCoeffs(prismVerges, 6,5);
+//Вывод тени
+openBuffer(Image1);
+print(Image1);
+//Расчёт проекций и граней для фигур
 getProjection(Image1,pyr,pyrProj,4);
 getProjection(Image1,prism,prismProj,6);
 fillFaceList(0);
@@ -443,24 +545,46 @@ getGab(0);
 getGab(1);
 countCoeffs(pyrVerges, 4,4);
 countCoeffs(prismVerges, 6,5);
-//Отрисовка
-openBuffer(Image1);
-print(Image1);
+//Вывод фигур
+print(Image1, 1);
 closeBuffer();
 }
 //---------------------------------------------------------------------------
+void __fastcall TForm1::Button9Click(TObject *Sender)
+{
+ //Выбор обрабатываемой фигуры
+ if(--fig_proc_mode==-1)
+ {
+  fig_proc_mode=1;
+ }
+ switch(fig_proc_mode)
+ {
+  case 0:
+   Edit3->Text="Pyramid";
+   pointNum=4;
+   vergesNum=4;
+   break;
+  case 1:
+   Edit3->Text="Prism";
+   pointNum=6;
+   vergesNum=5;
+   break;
+  }
+}
+//---------------------------------------------------------------------------
+
 void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
 {
     if(buff)
     {
      delete buff;
     }
- //delete[] zBuff;
     delete[] prism;
     delete[] prismVerges;
  delete[] pyrVerges;
- //delete[] vergeGab;
  delete[] pyr;
+ delete[] prismSdw;
+ delete[] pyrSdw;
  for(int i=0;i<6;i++)
  {
   delete [] prismProj[i];
@@ -474,7 +598,7 @@ void __fastcall TForm1::Form1Close(TObject *Sender, TCloseAction &Action)
 }
 //---------------------------------------------------------------------------
 
-void print(TImage* Image1)
+void print(TImage* Image1, int mode)
 {
 vector<int> stack;
 int N=9;
@@ -538,10 +662,13 @@ while(!stack.empty())
      {
       verges=pyrVerges;
      }
-     buff[window[0]+(window[1])*Image1->Width]=verges[faceNum].color;
-     if(window[0]+(window[1]+(int)ySdw)*Image1->Width<Image1->Height*Image1->Width)
+     if(mode==0)
      {
-      buff[window[0]+(window[1]+(int)ySdw)*Image1->Width]=0;
+      buff[window[0]+(window[1])*Image1->Width]=0;
+     }
+     else
+     {
+      buff[window[0]+(window[1])*Image1->Width]=verges[faceNum].color;
      }
     }
    }
@@ -551,6 +678,8 @@ while(!stack.empty())
  //Вывод буфера на экран
  SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
  //Обозначение вершин буквами
+if(mode==1)
+{
  face* verges=pyrVerges;
  MyPoint* ob=pyr;
  int letPoint[3]={0,0,1};
@@ -574,6 +703,7 @@ while(!stack.empty())
     Image1->Canvas->TextOutA(verges[i].f[j][0],verges[i].f[j][1],ob[verges[i].index[j]].get_let());
    }
   }
+ }
  }
 
 }
@@ -645,21 +775,21 @@ void rotandscale(MyPoint* o, int pointNum, bool sw, bool sign)
 //----------------------------------------------------------------------------
 void prisminit(MyPoint* o)
 {
-  o[0]=MyPoint('A',0.0,prismEdge,-h/2);
-  o[1]=MyPoint(char('A'+1),0.0,0.0,-h/2);
-  o[2]=MyPoint(char('A'+2),prismEdge,0.0,-h/2);
+  o[0]=MyPoint('A',0.0,prismEdge,h/2+prismUp);
+  o[1]=MyPoint(char('A'+1),0.0,0.0,h/2+prismUp);
+  o[2]=MyPoint(char('A'+2),prismEdge,0.0,h/2+prismUp);
  for(int i=3; i<6; i++)
  {
- o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h);
+ o[i]=MyPoint(char('A'+i),o[i-3].get_x(),o[i-3].get_y(),o[i-3].get_z()+h+prismUp);
  }
 }
-
+//---------------------------------------------------------------------------
 void pyrinit(MyPoint* o)
 {
-  o[0]=MyPoint(char('A'),0.0,pyrEdge/1.73205,0);
-  o[1]=MyPoint(char('A'+1),(pyrEdge/1.73205)*0.86603,(pyrEdge/1.73205)*-0.5,0);
-  o[2]=MyPoint(char('A'+2),(pyrEdge/1.73205)*-0.86603,(pyrEdge/1.73205)*-0.5,0);
-  o[3]=MyPoint(char('A'+3),0.0,0.0,pyrH);
+  o[0]=MyPoint(char('A'),0.0,pyrEdge/1.73205,pyrUp);
+  o[1]=MyPoint(char('A'+1),(pyrEdge/1.73205)*0.86603,(pyrEdge/1.73205)*-0.5,pyrUp);
+  o[2]=MyPoint(char('A'+2),(pyrEdge/1.73205)*-0.86603,(pyrEdge/1.73205)*-0.5,pyrUp);
+  o[3]=MyPoint(char('A'+3),0.0,0.0,pyrH+pyrUp);
 }
 //---------------------------------------------------------------------------
 
@@ -877,18 +1007,7 @@ void surfaceFill(TColor* Image, unsigned int fillColor, unsigned int brColor, in
  surfaceFill(Image, fillColor, brColor, w, x, y-1);
  }
 }
-
-void windowFill(TColor* frame, int* w, int x, int y, unsigned int color)
-{
-  if((x-w[1]!=w[2])&&(y-w[0]!=w[2]))
- {
- frame[x+y*w[2]]=color;
- windowFill(frame, w, x+1, y);
- windowFill(frame, w, x, y+1);
- //windowFill(frame, w, x-1, y);
- //windowFill(frame, w, x, y-1);
- }
-}
+//--------------------------------------------------------------------------
 int isOuter(int* w, int i)
 {
   face* verges;
@@ -906,14 +1025,13 @@ int isOuter(int* w, int i)
   int yd = w[1];
   int yu = w[1]+w[2]-1;
   int out=1;
-  //getGab(i);
   if(verges[i].gab[0]>xr){out=0;}
   if(verges[i].gab[1]<xl){out=0;}
   if(verges[i].gab[2]>yu){out=0;}
   if(verges[i].gab[3]<yd){out=0;}
   return out;
 }
-
+//---------------------------------------------------------------------------
 void getGab(int fig)
 {
   face* verges;
@@ -930,6 +1048,10 @@ void getGab(int fig)
   }
   for(int i=0;i<N;i++)
   {
+    verges[i].gab[0]=verges[i].f[0][0];
+    verges[i].gab[1]=verges[i].f[0][0];
+    verges[i].gab[2]=verges[i].f[0][1];
+    verges[i].gab[3]=verges[i].f[0][1];
     for(int j=0;j<4-verges[i].trian;j++)
     {
      if(verges[i].gab[0]>verges[i].f[j][0])
@@ -948,8 +1070,6 @@ void getGab(int fig)
 int getFaceNum(int* w, double* zMaxIn)
 {
  face* verges=pyrVerges;
- if(w[0]==200&&w[1]==260)
- {int c=0;}
  int faceNum=-1;
  int vis=-2;
  double zMax=-100000.0;
@@ -1009,14 +1129,15 @@ int getFaceNum(int* w, double* zMaxIn)
 }
 
 
-
+//-----------------------------------------------------------------------------
 int isVisible(double x, double y, double p1x, double p1y, double p2x, double p2y)
 {
  int vis=0;
- vis=(x-p1x)*(p2y-p1y)-(y-p1y)*(p2x-p1x);
- if(vis!=0)
+ double prod=0;
+ prod=(x-p1x)*(p2y-p1y)-(y-p1y)*(p2x-p1x);
+ if(prod!=0)
  {
-  vis=(vis<0)?-1:1;
+  vis=(prod<0)?-1:1;
  }
  return vis;
 }
@@ -1054,11 +1175,6 @@ double getZ(int* w, int i)
   zp=-1*(verges[i].A*xCen+verges[i].B*yCen+verges[i].D)/verges[i].C;
  }
  return zp;
-}
-void __fastcall TForm1::Image1MouseMove(TObject *Sender,
-      TShiftState Shift, int X, int Y)
-{
- LabeledEdit1->Text=IntToStr(X)+", " + IntToStr(Y);
 }
 //---------------------------------------------------------------------------
 void copy(double* vp, double* p)
@@ -1106,7 +1222,6 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
    proj[3][0]=0;proj[3][1]=0;proj[3][2]=0;proj[3][3]=1;
    break;
  }
-
  for(k=0;k<pointNum;k++)
  {
   double v1[4]={o[k].get_x(),o[k].get_y(),o[k].get_z(),1};
@@ -1148,6 +1263,25 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
   //Проверка на выход точки за холст
   if(v2[0]+d<0||v2[0]+d>Image1->Width||v2[1]+d<0||v2[1]+d>Image1->Height)
   {
+   if(o==prismSdw||o==pyrSdw)
+   {
+    for(int j=0;j<4;j++)
+    {
+     pyr[j].set_x();
+     pyr[j].set_y();
+     pyr[j].set_z();
+    }
+    for(int j=0;j<6;j++)
+    {
+     prism[j].set_x();
+     prism[j].set_y();
+     prism[j].set_z();
+    }
+    makeShadow(Image1,pyr,pyrSdw,pyrProj,4);
+    makeShadow(Image1,prism,prismSdw,prismProj,6);
+    k=-1;
+    continue;
+   }
    for(int j=0;j<pointNum;j++)
    {
     o[j].set_x();
@@ -1160,49 +1294,15 @@ void getProjection(TImage* Image1,MyPoint* o,double** projObj, int pointNum)
  }
 }
 //---------------------------------------------------------------------------
-void __fastcall TForm1::Button9Click(TObject *Sender)
-{
- //Выбор обрабатываемой фигуры
- if(--fig_proc_mode==-1)
- {
-  fig_proc_mode=1;
- }
- switch(fig_proc_mode)
- {
-  case 0:
-   Edit3->Text="Pyramid";
-   pointNum=4;
-   vergesNum=4;
-   break;
-  case 1:
-   Edit3->Text="Prism";
-   pointNum=6;
-   vergesNum=5;
-   break;
-  }
-}
-//---------------------------------------------------------------------------
 
-void makeShadow(TImage* Image1)
+void makeShadow(TImage* Image1,MyPoint* o,MyPoint* sdwOb,double** projObj, int pointNum)
 {
- double shadProj[4][4]={{1,0,-1*light[0]/light[2],0},{0,1,-1*light[1]/light[2],ySdw},{0,0,0,0},{0,0,0,1}};
- double vergeShad[4][3]={0};
- double vergeShadCen[3]={0};
- face* verges=pyrVerges;
- MyPoint* ob=pyr;
+ double shadProj[4][4]={{1,0,-1*light[0]/light[2],0},{0,1,-1*light[1]/light[2],0},{0,0,0,0},{0,0,0,1}};
  // Преобразование точек
- for(int k=0;k<5;k++)
- {
-  if(k>3&&verges==pyrVerges)
-  {
-   k-=4;
-   verges=prismVerges;
-   ob=prism;
-  }
   int i=0;
-  for(int i=0;i<4-verges[k].trian;i++)
+  for(int i=0;i<pointNum;i++)
   {
-   double v1[4]={verges[k].f[i][0],verges[k].f[i][1],verges[k].f[i][2],1};
+   double v1[4]={o[i].get_x(),o[i].get_y(),o[i].get_z(),1};
    double v2[4]={0, 0, 0, 1};
    for (int j = 0;j < 4;j++)
    {
@@ -1213,53 +1313,8 @@ void makeShadow(TImage* Image1)
         }
         v2[j] = sum;
    }
-   vergeShad[i][0]=v2[0];
-   vergeShad[i][1]=v2[1];
-   vergeShad[i][2]=v2[2];
-   vergeShadCen[0]+=vergeShad[i][0];
-   vergeShadCen[1]+=vergeShad[i][1];
-   vergeShadCen[2]+=vergeShad[i][2];
-  }
-  vergeShadCen[0]/=(4-verges[k].trian);
-  vergeShadCen[1]/=(4-verges[k].trian);
-  vergeShadCen[2]/=(4-verges[k].trian);
-  for(i=0;i<(3-verges[k].trian);i++)
-  {
-   bresline(buff,Image1->Width,vergeShad[i][0],vergeShad[i][1],vergeShad[i+1][0],vergeShad[i+1][1]);
-  }
-  bresline(buff,Image1->Width,vergeShad[i][0],vergeShad[i][1],vergeShad[0][0],vergeShad[0][1]);
-  surfaceFill(buff, 0,0, Image1->Width, vergeShadCen[0], vergeShadCen[1]);
-  vergeShadCen[0]=0;
-  vergeShadCen[1]=0;
-  vergeShadCen[2]=0;
+   sdwOb[i].set_x(v2[0]);
+   sdwOb[i].set_y(v2[1]);
+   sdwOb[i].set_z(v2[2]);
  }
-  /*
- for(int i=0;i<5;i++)
- {
- if(verges[i].toPrint)
- {
- /*
- if(!verges[i].trian)
- {//Отрисовка контура четырёхугольных граней
- bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
- bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
- bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[3][0],verges[i].f[3][1]);
- bresline(buff,Image1->Width,verges[i].f[3][0],verges[i].f[3][1],verges[i].f[0][0],verges[i].f[0][1]);
- }
- else
- {//Отрисовка контура треугольных граней
- /*
- bresline(buff,Image1->Width,verges[i].f[0][0],verges[i].f[0][1],verges[i].f[1][0],verges[i].f[1][1]);
- bresline(buff,Image1->Width,verges[i].f[1][0],verges[i].f[1][1],verges[i].f[2][0],verges[i].f[2][1]);
- bresline(buff,Image1->Width,verges[i].f[2][0],verges[i].f[2][1],verges[i].f[0][0],verges[i].f[0][1]);
-
- }
- verges[i].A=0.0;
- verges[i].B=0.0;
- verges[i].C=0.0;
- verges[i].D=0.0;
- }
- }  */
- SetDIBits(Image1->Picture->Bitmap->Canvas->Handle,Image1->Picture->Bitmap->Handle,0,Image1->Height,buff,&info,DIB_RGB_COLORS);
-
 }
